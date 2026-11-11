@@ -4,26 +4,89 @@ import { MockAdapter } from './mock';
 import { estimate } from './estimates';
 import { firebaseConfigured } from './firebase-config';
 import type { FirebaseAdapter } from './firebase-adapter';
-import type { Context, Power, RequestInput, Trace } from './types';
+import type { Context, Power, RequestInput, RouteDecision, Trace } from './types';
 
 const root = document.querySelector<HTMLDivElement>('#app')!;
 root.innerHTML = `
-<header><div><p class="eyebrow">#BUILDHYBRIDAI · LOCAL SCAFFOLD</p><h1>Hybrid Thermo Router</h1><p>Keep small work close. Escalate deliberately. See what happened.</p></div><span id="mode-badge" class="badge">MOCK · NO AI RUNNING</span></header>
-<main><section class="workspace" aria-labelledby="workspace-heading"><h2 id="workspace-heading">Request Workspace</h2>
-<div class="controls"><label>Execution<select id="execution"><option value="MOCK">Mock — deterministic fixture</option><option value="FIREBASE" ${firebaseConfigured ? '' : 'disabled'}>Firebase — real inference${firebaseConfigured ? '' : ' (config needed)'}</option></select></label>
-<label>Power Policy<select id="power"><option value="auto">Auto (detect when supported)</option><option value="plugged">Simulate plugged in</option><option value="battery">Simulate on battery</option></select></label></div>
-<p id="environment" class="meta"></p>
-<div class="checks"><label><input type="checkbox" id="private">Private — never send prompt to cloud</label><label><input type="checkbox" id="offline">Simulate offline</label><label id="mock-control"><input type="checkbox" id="device" checked>Mock Nano available</label></div>
-<p class="notice">Short public prompts may fall back to cloud. Private, offline, or battery requests are local-only. Long/image tasks are blocked under those restrictions. Local-only does not mean the SDK makes no metadata or attestation network calls.</p>
-<div class="controls"><button type="button" id="prepare">Prepare Nano (Firebase mode)</button><span id="preparation" role="status">Mock needs no model download.</span></div>
-<form id="request-form"><label for="prompt">Single-turn Prompt</label><textarea id="prompt" maxlength="24000" rows="7" placeholder="Summarize these field notes in 3 bullet points…">Summarize these field notes: inspect the sensor, replace the seal, and retest tomorrow.</textarea>
-<label for="image">Optional JPEG/PNG (max 4 MiB, cloud route)</label><input type="file" id="image" accept="image/jpeg,image/png"><p id="route-preview" class="route"></p>
-<div class="actions"><button type="submit" id="run">Run Request</button><button type="button" id="long-example" class="secondary">Load Long Example</button><button type="button" id="short-example" class="secondary">Load Short Example</button></div></form>
-<p id="status" role="status" aria-live="polite">Ready in mock mode. No Firebase credentials required.</p>
-<h2>Output</h2><pre id="output" aria-live="polite">Run a request to see a labeled fixture or a real Firebase response.</pre>
-</section><aside aria-labelledby="trace-heading"><div class="trace-title"><h2 id="trace-heading">Live Request Trace</h2><button id="export" class="secondary" type="button">Export Trace</button></div><p class="meta">Newest first · memory only · prompt and output omitted</p><div id="traces"><p class="empty">No requests yet. Try short text, then disable mock Nano to exercise fallback.</p></div>
-<details><summary>Estimate Method & Limits</summary><p>Energy is an illustrative client-only estimate: assumed 10 W for local or 2 W for cloud-waiting × wall seconds / 3600 = Wh. These uncalibrated assumptions are not measured power, total AI energy, carbon, or proof of savings. Server energy is unknown.</p><p>Text cost uses ceil(characters / 4) × configured USD per million tokens. Cloud pricing is unknown until verified rates are configured; image cost is not modeled. Local provider inference fee is $0, not zero total operating cost. Mock estimates are hypothetical.</p><p>The 1,200-character routing threshold is a conservative product heuristic, not a model token limit. Battery-local routing is a requested policy, not evidence that local inference saves battery.</p></details>
-</aside></main><footer>Provisional concept · Apache-2.0 · all real inference through Firebase AI Logic · no measured efficiency claims</footer>`;
+<div class="topbar"><span class="topbar-name">Hybrid Thermo Router</span><span id="mode-badge" class="badge">MOCK · NO AI RUNNING</span></div>
+<header>
+  <div class="hero">
+    <p class="eyebrow">#BUILDHYBRIDAI · ENERGY-AWARE HYBRID ROUTING</p>
+    <h1>Hybrid Thermo Router</h1>
+    <p class="lead">Keep short or private work on this device with Gemini Nano. Escalate long text or images to a cloud Gemini model through Firebase AI Logic. Every request shows why it was routed, which source actually ran, wall latency, and uncalibrated energy and cost estimates — not measured savings.</p>
+    <ul class="policy">
+      <li><strong>Private, offline, or battery</strong> On-device only. Long or image tasks are blocked so the prompt is not sent to the cloud.</li>
+      <li><strong>Short public text</strong> Prefer on-device Nano. Firebase may fall back to the cloud if the local model is unavailable.</li>
+      <li><strong>Long text or an image</strong> Explicit cloud route, only when policy allows. All real inference goes through Firebase AI Logic.</li>
+    </ul>
+  </div>
+</header>
+<main>
+  <section class="workspace" aria-labelledby="workspace-heading">
+    <h2 id="workspace-heading">Request Workspace</h2>
+    <div class="controls">
+      <label>Execution
+        <select id="execution">
+          <option value="MOCK">Mock — deterministic fixture</option>
+          <option value="FIREBASE" ${firebaseConfigured ? '' : 'disabled'}>Firebase — real inference${firebaseConfigured ? '' : ' (config needed)'}</option>
+        </select>
+      </label>
+      <label>Power Policy
+        <select id="power">
+          <option value="auto">Auto (detect when supported)</option>
+          <option value="plugged">Simulate plugged in</option>
+          <option value="battery">Simulate on battery</option>
+        </select>
+      </label>
+    </div>
+    <p id="environment" class="meta"></p>
+    <div class="checks">
+      <label><input type="checkbox" id="private">Private — never send prompt to cloud</label>
+      <label><input type="checkbox" id="offline">Simulate offline</label>
+      <label id="mock-control"><input type="checkbox" id="device" checked>Mock Nano available</label>
+    </div>
+    <p class="notice">Short public prompts may fall back to cloud. Private, offline, or battery requests are local-only. Long/image tasks are blocked under those restrictions. Local-only does not mean the SDK makes no metadata or attestation network calls.</p>
+    <div class="controls">
+      <button type="button" id="prepare">Prepare Nano (Firebase mode)</button>
+      <span id="preparation" role="status">Mock needs no model download.</span>
+    </div>
+    <form id="request-form">
+      <label for="prompt">Single-turn Prompt</label>
+      <textarea id="prompt" maxlength="24000" rows="7" placeholder="Summarize these field notes in 3 bullet points…">Summarize these field notes: inspect the sensor, replace the seal, and retest tomorrow.</textarea>
+      <label for="image">Optional JPEG/PNG (max 4 MiB, cloud route)</label>
+      <input type="file" id="image" accept="image/jpeg,image/png">
+      <div id="route-preview" class="route" aria-live="polite">
+        <p class="route-mode"></p>
+        <p class="route-why"></p>
+        <p class="route-means"></p>
+      </div>
+      <div class="actions">
+        <button type="submit" id="run">Run Request</button>
+        <button type="button" id="long-example" class="secondary">Load Long Example</button>
+        <button type="button" id="short-example" class="secondary">Load Short Example</button>
+      </div>
+    </form>
+    <p id="status" role="status" aria-live="polite">Ready in mock mode. No Firebase credentials required.</p>
+    <h2>Output</h2>
+    <pre id="output" aria-live="polite">Run a request to see a labeled fixture or a real Firebase response.</pre>
+  </section>
+  <aside aria-labelledby="trace-heading">
+    <div class="trace-title">
+      <h2 id="trace-heading">Live Request Trace</h2>
+      <button id="export" class="secondary" type="button">Export Trace</button>
+    </div>
+    <p class="meta">Newest first · memory only · prompt and output omitted. Requested mode and actual source are listed separately.</p>
+    <div id="traces"><p class="empty">No requests yet. Try short text, then disable mock Nano to exercise fallback.</p></div>
+    <details>
+      <summary>Estimate Method & Limits</summary>
+      <p>Energy is an illustrative client-only estimate: assumed 10 W for local or 2 W for cloud-waiting × wall seconds / 3600 = Wh. These uncalibrated assumptions are not measured power, total AI energy, carbon, or proof of savings. Server energy is unknown.</p>
+      <p>Text cost uses ceil(characters / 4) × configured USD per million tokens. Cloud pricing is unknown until verified rates are configured; image cost is not modeled. Local provider inference fee is $0, not zero total operating cost. Mock estimates are hypothetical.</p>
+      <p>The 1,200-character routing threshold is a conservative product heuristic, not a model token limit. Battery-local routing is a requested policy, not evidence that local inference saves battery.</p>
+    </details>
+  </aside>
+</main>
+<footer>Apache-2.0 · solo entry by Igor Holt · all real inference through Firebase AI Logic · estimates are uncalibrated · no measured efficiency claims</footer>`;
+
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const execution = el<HTMLSelectElement>('execution'), power = el<HTMLSelectElement>('power');
 const prompt = el<HTMLTextAreaElement>('prompt'), image = el<HTMLInputElement>('image');
@@ -33,12 +96,28 @@ let actualPower: Power = 'unknown';
 let firebase: FirebaseAdapter | undefined;
 const traces: Trace[] = [];
 const context = (): Context => ({ online: navigator.onLine && !offline.checked, private: privateBox.checked, power: power.value === 'auto' ? actualPower : power.value as Power });
+
+function routeExplanation(route: RouteDecision): string {
+  if (route.blocked) return 'This request will not be sent. Shorten the text, remove the image, or relax a restriction.';
+  if (route.mode === 'ONLY_ON_DEVICE') return 'On-device only. If Nano is unavailable, the request fails closed; the prompt is not sent to the cloud.';
+  if (route.mode === 'ONLY_IN_CLOUD') return 'Explicit cloud route through Firebase AI Logic. The prompt leaves this device.';
+  return 'Prefer on-device Nano. Firebase may fall back to the cloud if the local model is unavailable.';
+}
+
 function preview() {
   const ctx = context();
   const route = chooseRoute({ prompt: prompt.value, image: image.files?.length ? { data: '', mimeType: image.files[0].type } : undefined }, ctx);
-  el('route-preview').textContent = `${route.blocked ? 'BLOCKED' : route.mode} — ${route.reason}`;
+  const box = el('route-preview');
+  const mode = box.querySelector('.route-mode') as HTMLElement;
+  const why = box.querySelector('.route-why') as HTMLElement;
+  const means = box.querySelector('.route-means') as HTMLElement;
+  mode.textContent = route.blocked ? `BLOCKED · ${route.mode}` : route.mode;
+  mode.classList.toggle('blocked', route.blocked);
+  why.textContent = route.reason;
+  means.textContent = routeExplanation(route);
   el('environment').textContent = `Network: ${ctx.online ? 'online' : 'offline'} · Power: ${ctx.power}${power.value !== 'auto' ? ' (simulated)' : ''} · Device capability is confirmed only by a real SDK response.`;
 }
+
 [power, privateBox, offline, device, prompt, image].forEach(input => input.addEventListener('input', preview));
 window.addEventListener('online', preview); window.addEventListener('offline', preview);
 interface Battery { charging: boolean; addEventListener(name: string, cb: () => void): void; }
@@ -80,9 +159,23 @@ function rate(value: string | undefined): number | null { if (!value?.trim()) re
 function drawTraces() {
   const target = el('traces'); target.replaceChildren();
   for (const trace of traces) {
-    const card = document.createElement('article'); card.className = 'trace';
-    const heading = document.createElement('h3'); heading.textContent = `${trace.execution === 'MOCK' ? 'MOCK SIMULATED ' : ''}${trace.inferenceSource} · ${trace.status}`; card.append(heading);
-    const lines = [new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(new Date(trace.timestamp)) + ' ET', `Requested: ${trace.requestedMode}`, `Wall latency: ${trace.latencyMs.toFixed(1)} ms${trace.execution === 'MOCK' ? ' (fixture execution only)' : ''}`, trace.routingReason];
+    const sourceClass = trace.inferenceSource === 'ON_DEVICE' ? 'source-on-device' : trace.inferenceSource === 'IN_CLOUD' ? 'source-in-cloud' : 'source-unknown';
+    const card = document.createElement('article');
+    card.className = `trace ${sourceClass} status-${trace.status}`;
+    const heading = document.createElement('h3');
+    const pill = document.createElement('span');
+    pill.className = 'source-pill';
+    const sourceLabel = `${trace.execution === 'MOCK' ? 'MOCK SIMULATED ' : ''}${trace.inferenceSource}`;
+    pill.textContent = sourceLabel;
+    heading.append(pill, document.createTextNode(` · ${trace.status}`));
+    card.append(heading);
+    const lines = [
+      new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(new Date(trace.timestamp)) + ' ET',
+      `Requested: ${trace.requestedMode}`,
+      `Actual source: ${sourceLabel}`,
+      `Wall latency: ${trace.latencyMs.toFixed(1)} ms${trace.execution === 'MOCK' ? ' (fixture execution only)' : ''}`,
+      `Routing decision: ${trace.routingReason}`
+    ];
     if (trace.estimate) lines.push(`Client energy ESTIMATE: ${trace.estimate.clientWh.toExponential(2)} Wh`, `Provider cost ESTIMATE: ${trace.estimate.providerUsd === null ? 'unknown' : '$' + trace.estimate.providerUsd.toFixed(6)}`, trace.estimate.energyMethod, trace.estimate.costMethod);
     if (trace.error) lines.push(trace.error);
     for (const line of lines) { const row = document.createElement('p'); row.textContent = line; card.append(row); }
